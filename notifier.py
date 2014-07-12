@@ -22,6 +22,7 @@ class NewItemsFetcher(object):
     already_read_items = []
     new_items = None
     session = Session()
+    subject = 'New posts on site.'
 
     lock = None
 
@@ -104,7 +105,7 @@ class NewItemsFetcher(object):
         )
         print(u'Trying to send: {0}'.format(message))
         email = MIMEText(message, _charset='utf-8')
-        email['Subject'] = 'New posts on site.'
+        email['Subject'] = self.subject
         email['From'] = DEFAULT_FROM_EMAIL
         server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
         server.login(EMAIL_HOST_USER, EMAIL_HOST_PASSWORD)
