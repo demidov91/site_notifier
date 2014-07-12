@@ -14,7 +14,7 @@ MAX_BAD_ATTEMPTS = 3
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-class NewItemsFetcher:
+class NewItemsFetcher(object):
     DB_FILE = 'used_posts.json'
     target_url = TARGET_URL
     send_to = SEND_TO
@@ -46,35 +46,50 @@ class NewItemsFetcher:
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
 
-    def fetch_new_items(self):
-        response = self.session.get(self.target_url)
-        if response.status_code >= 400:
-            return False
-        doc = html.fromstring(response.text)
+    def doc_to_posts(self, document):
+        return document.cssselect('#contentIns .item')
+
+    def get_post_id(self, post):
+        return post.get('id')
+
+    def get_post_data(self, post):
+        price = post.cssselect('.nprice20, .nprice30')[0].text_content().strip()
+        place = post.cssselect('.it_title>address>a')[0].text_content().strip()
+        time = post.cssselect('.it_date')[0].text_content().strip()
+        phone = post.cssselect('ul.contact-data .icon-phone strong')[0].text_content().strip()
+        text = post.cssselect('.it_message>h2')[0].tail.strip()
+        link = post.cssselect('.it_title>address>a')[0].get('href')
+        return {
+            'price': price,
+            'place': place,
+            'time': time,
+            'text': text,
+            'phone': phone,
+            'link': link,
+        }
+
+    def fetch_news_from_doc(self, doc):
         new_news = []
-        for post in doc.cssselect('#contentIns .item'):
-            id = post.get('id')
+        for post in self.doc_to_posts(doc):
+            id = self.get_post_id(post)
             print(u'Processing post {0}'.format(id))
             if id in self.already_read_items:
                 continue
             else:
                 self.already_read_items.append(id)
-            price = post.cssselect('.nprice20, .nprice30')[0].text_content().strip()
-            place = post.cssselect('.it_title>address>a')[0].text_content().strip()
-            time = post.cssselect('.it_date')[0].text_content().strip()
-            phone = post.cssselect('ul.contact-data .icon-phone strong')[0].text_content().strip()
-            text = post.cssselect('.it_message>h2')[0].tail.strip()
-            link = post.cssselect('.it_title>address>a')[0].get('href')
-            new_news.append({
-                'price': price,
-                'place': place,
-                'time': time,
-                'text': text,
-                'phone': phone,
-                'link': link,
-            })
+            new_news.append(self.get_post_data(post))
         print('{0} new items is fetched.'.format(len(new_news)))
-        self.new_items = new_news
+        print(new_news)
+        return new_news
+
+    def fetch_new_items(self):
+        response = self.session.get(self.target_url)
+        if response.status_code >= 400:
+            print(response.text)
+            return False
+        doc = html.fromstring(response.text)
+        self.new_items = self.fetch_news_from_doc(doc)
+
 
     def _record_to_post(self, record):
         return u'{price} {place}\n{text}\n{phone}\n{link}\n{time}'.format(**record)
@@ -89,7 +104,7 @@ class NewItemsFetcher:
         )
         print(u'Trying to send: {0}'.format(message))
         email = MIMEText(message, _charset='utf-8')
-        email['Subject'] = 'New posts on neagent.'
+        email['Subject'] = 'New posts on site.'
         email['From'] = DEFAULT_FROM_EMAIL
         server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
         server.login(EMAIL_HOST_USER, EMAIL_HOST_PASSWORD)
